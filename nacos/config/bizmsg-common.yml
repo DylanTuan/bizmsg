@@ -19,6 +19,8 @@ spring:
     default-property-inclusion: non_null
   cloud:
     openfeign:
+      # 注意：report/upload 合并为 message-service 后，本工程暂无服务间调用，
+      # 这段超时模板当前没有任何模块使用（无模块引入 openfeign starter），保留供后续拆分服务时复用
       client:
         config:
           default:

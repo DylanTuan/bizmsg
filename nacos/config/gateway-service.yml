@@ -21,11 +21,12 @@ spring:
             allowed-headers: "*"
       routes:
         # lb:// 前缀表示走服务发现 + 负载均衡，服务名即 Nacos 注册名
-        - id: report-service
-          uri: lb://report-service
+        # 报文生成与落盘已合并为同一个 message-service，因此两条路由指向同一服务，只是路径前缀不同
+        - id: message-service-report
+          uri: lb://message-service
           predicates:
             - Path=/api/report/**
-        - id: upload-service
-          uri: lb://upload-service
+        - id: message-service-upload
+          uri: lb://message-service
           predicates:
             - Path=/api/upload/**

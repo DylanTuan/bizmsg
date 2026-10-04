@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue'
 
-import { fetchGatewayHealth, fetchReportHealth, fetchUploadHealth } from '@/api/monitor'
+import { fetchGatewayHealth, fetchMessageHealth } from '@/api/monitor'
 
 export interface ServiceStatus {
   key: string
@@ -30,18 +30,11 @@ function definitions(): ServiceDefinition[] {
       probe: fetchGatewayHealth
     },
     {
-      key: 'report-service',
-      name: '报文生成服务',
+      key: 'message-service',
+      name: '报文服务',
       port: 8081,
-      endpoint: import.meta.env.VITE_REPORT_HEALTH_URL,
-      probe: fetchReportHealth
-    },
-    {
-      key: 'upload-service',
-      name: '上传服务',
-      port: 8082,
-      endpoint: import.meta.env.VITE_UPLOAD_HEALTH_URL,
-      probe: fetchUploadHealth
+      endpoint: import.meta.env.VITE_MESSAGE_HEALTH_URL,
+      probe: fetchMessageHealth
     }
   ]
 }

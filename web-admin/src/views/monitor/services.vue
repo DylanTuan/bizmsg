@@ -55,7 +55,7 @@ onMounted(() => {
       </template>
 
       <el-row v-loading="loading" :gutter="16">
-        <el-col v-for="service in services" :key="service.key" :xs="24" :md="8">
+        <el-col v-for="service in services" :key="service.key" :xs="24" :md="12">
           <div class="service" :class="{ 'service--down': service.status !== 'UP' }">
             <div class="service__head">
               <span class="service__name">{{ service.name }}</span>
@@ -74,7 +74,7 @@ onMounted(() => {
         type="info"
         :closable="false"
         show-icon
-        title="指标为 0 时优先确认：Nacos 是否已启动（127.0.0.1:8848）、服务是否注册到 bizmsg 命名空间、开发服务器代理是否指向 8080/8081/8082。"
+        title="指标为 0 时优先确认：Nacos 是否已启动（127.0.0.1:8848）、服务是否注册到 bizmsg 命名空间、开发服务器代理是否指向 8080/8081。"
       />
     </el-card>
 

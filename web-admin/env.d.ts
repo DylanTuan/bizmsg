@@ -8,8 +8,7 @@ interface ImportMetaEnv {
   readonly VITE_APP_TITLE: string
   /** 各服务 Actuator 健康检查地址（网关未路由 actuator，因此单独配置） */
   readonly VITE_GATEWAY_HEALTH_URL: string
-  readonly VITE_REPORT_HEALTH_URL: string
-  readonly VITE_UPLOAD_HEALTH_URL: string
+  readonly VITE_MESSAGE_HEALTH_URL: string
   /** 网关路由表地址 */
   readonly VITE_GATEWAY_ROUTES_URL: string
 }

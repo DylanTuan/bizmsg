@@ -1,9 +1,0 @@
-# dataId: report-service.yml | group: DEFAULT_GROUP | 命名空间: bizmsg
-server:
-  port: 8081
-
-bizmsg:
-  upload:
-    # OpenFeign 目标服务名，由 Nacos 解析为实例地址
-    service-name: upload-service
-    path: /api/upload/receipt

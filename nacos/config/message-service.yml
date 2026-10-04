@@ -1,0 +1,10 @@
+# dataId: message-service.yml | group: DEFAULT_GROUP | 命名空间: bizmsg
+server:
+  port: 8081
+
+bizmsg:
+  upload:
+    # 模拟第三方上传：报文落盘目录与回执编号前缀
+    # 合并前这两项在 upload-service.yml；bizmsg.upload.service-name / path 已随 OpenFeign 一起移除
+    storage-dir: ./data/upload
+    receipt-prefix: RCPT

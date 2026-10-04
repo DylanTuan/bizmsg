@@ -128,8 +128,8 @@ function downloadXml(): void {
 
         <el-alert type="info" :closable="false" show-icon title="调用链路">
           <div class="tip">
-            前端 → 网关 :8080 <code>/api/report/generate</code> → report-service 生成 XML → OpenFeign 上传到
-            upload-service 落盘并生成回执。下游不可用时后端会降级返回（HTTP 200 +
+            前端 → 网关 :8080 <code>/api/report/generate</code> → message-service 生成 XML 并在同一进程内落盘、
+            生成回执（合并前这一步是一次 OpenFeign 远程调用）。落盘失败时后端会降级返回（HTTP 200 +
             <code>uploaded=false</code>），因此这里必须看 <code>uploaded</code> 字段而不是只看请求是否成功。
           </div>
         </el-alert>
@@ -161,7 +161,7 @@ function downloadXml(): void {
             :closable="false"
             show-icon
             :title="result.uploaded ? '报文已生成并成功上传' : '报文已生成，但上传失败（后端降级返回）'"
-            :description="result.uploaded ? `回执编号：${result.receiptNo}` : String(result.degradeReason ?? '请确认 upload-service 是否已启动')"
+            :description="result.uploaded ? `回执编号：${result.receiptNo}` : String(result.degradeReason ?? '请检查报文落盘目录是否可写')"
           />
 
           <el-descriptions :column="2" border size="small">

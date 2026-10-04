@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
 # bizmsg 统一运行脚本
-#   一条命令管理 Nacos、后端微服务（gateway / report / upload）与前端管理系统（web-admin）
+#   一条命令管理 Nacos、后端微服务（gateway / message）与前端管理系统（web-admin）
 #
 # 用法：./run.sh <命令> [服务...]
-#   start [服务...]     启动服务（默认 all；all 顺序：nacos -> gateway -> report -> upload -> web）
+#   start [服务...]     启动服务（默认 all；all 顺序：nacos -> gateway -> message -> web）
 #   stop  [服务...]     停止服务（默认 all，按启动的逆序停止）
 #   restart [服务...]   重启服务
 #   status              查看所有服务的运行状态与访问地址
@@ -13,8 +13,8 @@
 #   import-config       把 nacos/config/*.yml 发布到 Nacos 配置中心
 #   help                查看帮助
 #
-# 服务名：nacos | gateway | report | upload | web | all
-#   gateway = gateway-service（8080）、report = report-service（8081）、upload = upload-service（8082）
+# 服务名：nacos | gateway | message | web | all
+#   gateway = gateway-service（8080）、message = message-service（8081，报文生成 + 落盘回执）
 #   web = web-admin 前端（5173）
 #
 set -euo pipefail
@@ -75,8 +75,7 @@ service_desc() {
   case "$1" in
     nacos) echo 'Nacos 注册/配置中心' ;;
     gateway) echo 'gateway-service 网关' ;;
-    report) echo 'report-service 报文服务' ;;
-    upload) echo 'upload-service 上传服务' ;;
+    message) echo 'message-service 报文服务' ;;
     web) echo 'web-admin 前端管理系统' ;;
     *) echo "$1" ;;
   esac
@@ -86,8 +85,7 @@ service_port() {
   case "$1" in
     nacos) echo 8848 ;;
     gateway) echo 8080 ;;
-    report) echo 8081 ;;
-    upload) echo 8082 ;;
+    message) echo 8081 ;;
     web) echo 5173 ;;
     *) return 1 ;;
   esac
@@ -96,8 +94,7 @@ service_port() {
 service_module() {
   case "$1" in
     gateway) echo gateway-service ;;
-    report) echo report-service ;;
-    upload) echo upload-service ;;
+    message) echo message-service ;;
     *) echo '' ;;
   esac
 }
@@ -110,14 +107,13 @@ resolve_targets() {
   fi
   for item in ${raw}; do
     case "${item}" in
-      all) out="${out} nacos gateway report upload web" ;;
+      all) out="${out} nacos gateway message web" ;;
       nacos) out="${out} nacos" ;;
       gateway | gateway-service) out="${out} gateway" ;;
-      report | report-service) out="${out} report" ;;
-      upload | upload-service) out="${out} upload" ;;
+      message | message-service) out="${out} message" ;;
       web | web-admin | admin) out="${out} web" ;;
       *)
-        err "未知服务：${item}（可选：nacos gateway report upload web all）"
+        err "未知服务：${item}（可选：nacos gateway message web all）"
         return 1
         ;;
     esac
@@ -336,7 +332,7 @@ start_web() {
 start_one() {
   case "$1" in
     nacos) start_nacos ;;
-    gateway | report | upload) start_backend "$1" ;;
+    gateway | message) start_backend "$1" ;;
     web) start_web ;;
     *) err "未知服务：$1"; return 1 ;;
   esac
@@ -382,7 +378,7 @@ print_summary() {
   printf '  %s前端管理系统%s  http://localhost:5173  （演示账号 admin/123456）\n' "${C_CYAN}" "${C_END}"
   printf '  %s网关入口%s      http://127.0.0.1:8080\n' "${C_CYAN}" "${C_END}"
   printf '  %sNacos 控制台%s  http://%s/nacos  （nacos/nacos）\n' "${C_CYAN}" "${C_END}" "${NACOS_ADDR}"
-  printf '  %s查看日志%s      ./run.sh logs <nacos|gateway|report|upload|web>\n' "${C_CYAN}" "${C_END}"
+  printf '  %s查看日志%s      ./run.sh logs <nacos|gateway|message|web>\n' "${C_CYAN}" "${C_END}"
 }
 
 ## ------------------------------ 子命令 ------------------------------
@@ -403,7 +399,7 @@ cmd_start() {
 cmd_stop() {
   local targets
   targets="$(resolve_targets "$@")" || exit 2
-  # 按启动的逆序停止：web -> upload -> report -> gateway -> nacos
+  # 按启动的逆序停止：web -> message -> gateway -> nacos
   targets="$(reverse_words "${targets}")"
   local failed=0 item
   for item in ${targets}; do
@@ -424,7 +420,7 @@ cmd_status() {
   echo ''
   echo 'bizmsg 服务状态'
   echo '----------------------------------------------------------------'
-  for name in nacos gateway report upload web; do
+  for name in nacos gateway message web; do
     port="$(service_port "${name}")"
     pid="$(port_pid "${port}")"
     if [ -n "${pid}" ]; then
@@ -442,13 +438,12 @@ cmd_status() {
 cmd_logs() {
   local name="${1:-}"
   if [ -z "${name}" ]; then
-    err '用法：./run.sh logs <nacos|gateway|report|upload|web>'
+    err '用法：./run.sh logs <nacos|gateway|message|web>'
     return 2
   fi
   case "${name}" in
     gateway | gateway-service) name=gateway ;;
-    report | report-service) name=report ;;
-    upload | upload-service) name=upload ;;
+    message | message-service) name=message ;;
     web | web-admin | admin) name=web ;;
     nacos) ;;
     *)
@@ -496,7 +491,7 @@ bizmsg 统一运行脚本
 
 命令：
   start [服务...]     启动服务，默认 all
-                      all 顺序：nacos -> gateway -> report -> upload -> web
+                      all 顺序：nacos -> gateway -> message -> web
   stop  [服务...]     停止服务，默认 all（按启动逆序停止）
   restart [服务...]   重启服务
   status              查看所有服务的运行状态与访问地址
@@ -508,17 +503,16 @@ bizmsg 统一运行脚本
 服务名与端口：
   nacos    8848   Nacos 注册/配置中心（Docker 容器 bizmsg-nacos）
   gateway  8080   gateway-service 网关，前端 /api 统一入口
-  report   8081   report-service 报文服务
-  upload   8082   upload-service 上传服务
+  message  8081   message-service 报文服务（生成 XML + 落盘回执）
   web      5173   web-admin 前端管理系统（Vite dev server）
-  all             nacos + gateway + report + upload + web
+  all             nacos + gateway + message + web
 
 常用示例：
   ./run.sh start                  一键启动全部服务
   ./run.sh start nacos web        只启动 Nacos 与前端
   ./run.sh restart gateway        重启网关
   ./run.sh status                 查看状态
-  ./run.sh logs report            查看报文服务日志
+  ./run.sh logs message           查看报文服务日志
   ./run.sh stop                   停止全部服务
 
 说明：

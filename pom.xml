@@ -14,8 +14,7 @@
   <modules>
     <module>nacos</module>
     <module>gateway-service</module>
-    <module>report-service</module>
-    <module>upload-service</module>
+    <module>message-service</module>
   </modules>
 
   <properties>

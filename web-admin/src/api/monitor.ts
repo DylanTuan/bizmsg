@@ -2,8 +2,8 @@ import { request } from '@/api/request'
 import type { GatewayRouteDefinition, GatewayRouteRaw, GatewayRouteView, HealthResponse } from '@/types/api'
 
 /**
- * Actuator 端点没有被网关路由（网关只转发 /api/report/** 与 /api/upload/**），
- * 所以这里用 baseURL='' 直连各服务，地址由环境变量给出。
+ * Actuator 端点没有被网关路由（网关只转发 /api/report/** 与 /api/upload/**，
+ * 合并后这两条路由都指向 message-service），所以这里用 baseURL='' 直连各服务，地址由环境变量给出。
  * skipErrorMessage：页面自己渲染每个服务的状态，不需要再弹全局错误。
  */
 const healthOptions = { baseURL: '', method: 'get', skipErrorMessage: true, timeout: 5000 } as const
@@ -12,12 +12,8 @@ export function fetchGatewayHealth() {
   return request<HealthResponse>({ ...healthOptions, url: import.meta.env.VITE_GATEWAY_HEALTH_URL })
 }
 
-export function fetchReportHealth() {
-  return request<HealthResponse>({ ...healthOptions, url: import.meta.env.VITE_REPORT_HEALTH_URL })
-}
-
-export function fetchUploadHealth() {
-  return request<HealthResponse>({ ...healthOptions, url: import.meta.env.VITE_UPLOAD_HEALTH_URL })
+export function fetchMessageHealth() {
+  return request<HealthResponse>({ ...healthOptions, url: import.meta.env.VITE_MESSAGE_HEALTH_URL })
 }
 
 /** 新版返回 { route_id, route_definition }，旧版直接平铺字段，统一取定义体。 */
