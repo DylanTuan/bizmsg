@@ -1,0 +1,31 @@
+# dataId: gateway-service.yml | group: DEFAULT_GROUP | 命名空间: bizmsg
+server:
+  port: 8080
+
+management:
+  endpoint:
+    gateway:
+      # SCG 4.0.0 起该开关默认 false：bizmsg-common.yml 的 exposure.include 只负责“暴露”，
+      # 不显式启用则 /actuator/gateway/routes、/actuator/gateway/refresh 一律 404
+      enabled: true
+
+spring:
+  cloud:
+    gateway:
+      # 跨域：练习项目放开全部来源，生产环境需要收敛为白名单
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowed-origin-patterns: "*"
+            allowed-methods: "*"
+            allowed-headers: "*"
+      routes:
+        # lb:// 前缀表示走服务发现 + 负载均衡，服务名即 Nacos 注册名
+        - id: report-service
+          uri: lb://report-service
+          predicates:
+            - Path=/api/report/**
+        - id: upload-service
+          uri: lb://upload-service
+          predicates:
+            - Path=/api/upload/**

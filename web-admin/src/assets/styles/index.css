@@ -1,0 +1,66 @@
+/* 全局样式：只做低风险的 reset 与主题变量，组件内部样式一律写在 SFC 的 scoped 中 */
+:root {
+  --sidebar-width: 210px;
+  --sidebar-collapse-width: 64px;
+  --layout-header-height: 56px;
+  --page-bg: #f5f7fa;
+  --brand-color: #1f6feb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--page-bg);
+  color: #303133;
+  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--brand-color);
+  text-decoration: none;
+}
+
+/* 顶部路由加载进度条配色与主题保持一致 */
+#nprogress .bar {
+  background: var(--brand-color) !important;
+}
+
+#nprogress .peg {
+  box-shadow: 0 0 10px var(--brand-color), 0 0 5px var(--brand-color) !important;
+}
+
+/* 报文内容等需要保留换行的文本块 */
+.code-block {
+  margin: 0;
+  padding: 12px;
+  max-height: 420px;
+  overflow: auto;
+  background: #0d1117;
+  border-radius: 6px;
+  color: #c9d1d9;
+  font-family: Menlo, Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.page-card {
+  margin-bottom: 16px;
+}
+
+.text-muted {
+  color: #909399;
+}

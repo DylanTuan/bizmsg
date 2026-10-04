@@ -1,0 +1,27 @@
+# 启动 Nacos 2.x（standalone 模式 + 内置 Derby 存储），供 bizmsg 各服务注册与读取配置
+# 用法：cd nacos && docker compose up -d
+services:
+  nacos:
+    image: nacos/nacos-server:v2.2.3
+    platform: linux/amd64
+    container_name: bizmsg-nacos
+    environment:
+      MODE: standalone
+      PREFER_HOST_MODE: hostname
+      # 练习项目关闭鉴权，方便脚本直接调用 OpenAPI；生产环境务必开q启
+      NACOS_AUTH_ENABLE: "false"
+      JVM_XMS: 256m
+      JVM_XMX: 512m
+    ports:
+      - "8848:8848" # 控制台与 OpenAPI
+      - "9848:9848" # Nacos 2.x 客户端 gRPC 端口，必须对外开放
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8848/nacos/v1/console/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    volumes:
+      - nacos-logs:/home/nacos/logs
+
+volumes:
+  nacos-logs:

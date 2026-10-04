@@ -1,0 +1,16 @@
+# 本地仅保留 Nacos 地址与配置导入声明，其余配置（端口、路由、跨域）统一维护在 nacos/config/
+spring:
+  application:
+    name: gateway-service
+  # Boot 3 已移除 bootstrap.yml，改用 config.import 拉取远程配置；optional: 前缀表示 Nacos 不可用时仍可启动
+  config:
+    import:
+      - optional:nacos:bizmsg-common.yml
+      - optional:nacos:gateway-service.yml
+  cloud:
+    nacos:
+      server-addr: 127.0.0.1:8848
+      discovery:
+        namespace: bizmsg
+      config:
+        namespace: bizmsg

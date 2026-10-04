@@ -1,0 +1,9 @@
+# dataId: upload-service.yml | group: DEFAULT_GROUP | 命名空间: bizmsg
+server:
+  port: 8082
+
+bizmsg:
+  upload:
+    # 模拟第三方上传：报文落盘目录与回执编号前缀
+    storage-dir: ./data/upload
+    receipt-prefix: RCPT

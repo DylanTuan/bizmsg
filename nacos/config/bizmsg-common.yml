@@ -1,0 +1,32 @@
+# dataId: bizmsg-common.yml | group: DEFAULT_GROUP | 命名空间: bizmsg
+# 公共配置：各服务在本地 application.yml 中用 spring.config.import: nacos:bizmsg-common.yml 引入
+management:
+  endpoints:
+    web:
+      exposure:
+        # gateway 端点仅网关有：/actuator/gateway/routes 可直接查看路由是否按配置加载
+        # 注意：include 只决定“是否对外暴露”，端点本身还需在 gateway-service.yml 里
+        # 配 management.endpoint.gateway.enabled=true 才会注册（SCG 4.0.0 起默认为 false）
+        include: health,info,gateway
+  endpoint:
+    health:
+      show-details: always
+
+spring:
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+    default-property-inclusion: non_null
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            # 服务间调用超时：连接 3s、读取 5s，避免线程被慢调用占满
+            connect-timeout: 3000
+            read-timeout: 5000
+            logger-level: basic
+
+logging:
+  level:
+    com.duanjiajun.bizmsg: debug
