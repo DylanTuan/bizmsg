@@ -40,6 +40,7 @@ public class ReceiptStorageService {
     private final UploadProperties properties;
 
     public ReceiptStorageService(UploadProperties properties) {
+
         this.properties = properties;
     }
 

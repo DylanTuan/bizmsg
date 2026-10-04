@@ -27,12 +27,14 @@ public class ReportController {
     private final ReportService reportService;
 
     public ReportController(ReportService reportService) {
+
         this.reportService = reportService;
     }
 
     /** 连通性探测，用于确认网关路由已生效。 */
     @GetMapping("/ping")
     public Map<String, String> ping() {
+
         return Map.of("service", "message-service", "status", "UP");
     }
 

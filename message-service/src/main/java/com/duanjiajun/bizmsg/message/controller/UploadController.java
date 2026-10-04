@@ -23,6 +23,7 @@ public class UploadController {
     private final ReceiptStorageService storageService;
 
     public UploadController(ReceiptStorageService storageService) {
+
         this.storageService = storageService;
     }
 
