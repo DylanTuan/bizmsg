@@ -1,0 +1,20 @@
+# dataId: business-service.yml | group: DEFAULT_GROUP | 命名空间: bizmsg
+server:
+  port: 8082
+
+spring:
+  rabbitmq:
+    # 生产者可靠投递：开启 publisher confirm，TransferEventPublisher 会同步等待 broker 的 ack
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      # 路由不到队列时把消息退回给生产者（配合 publisher-returns），避免交换机存在但没绑定而静默丢消息
+      mandatory: true
+
+bizmsg:
+  mq:
+    # 必须与 message-service 侧声明的交换机 / routing key 一致
+    exchange: bizmsg.business
+    routing-key: business.transfer.completed
+    # 等待 broker confirm 的超时秒数；超时视为投递失败，业务状态不推进
+    confirm-timeout-seconds: 5

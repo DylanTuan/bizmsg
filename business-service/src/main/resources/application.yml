@@ -1,0 +1,15 @@
+# 本地仅保留 Nacos 地址与配置导入声明，端口/MQ 目标等统一维护在 nacos/config/business-service.yml
+spring:
+  application:
+    name: business-service
+  config:
+    import:
+      - optional:nacos:bizmsg-common.yml
+      - optional:nacos:business-service.yml
+  cloud:
+    nacos:
+      server-addr: 127.0.0.1:8848
+      discovery:
+        namespace: bizmsg
+      config:
+        namespace: bizmsg
