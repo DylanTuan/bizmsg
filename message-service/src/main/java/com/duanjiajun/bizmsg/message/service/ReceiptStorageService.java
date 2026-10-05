@@ -9,6 +9,11 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 import javax.xml.XMLConstants;
@@ -23,7 +28,9 @@ import org.xml.sax.SAXException;
 
 import com.duanjiajun.bizmsg.message.config.UploadProperties;
 import com.duanjiajun.bizmsg.message.dto.ReceiptResponse;
+import com.duanjiajun.bizmsg.message.dto.ReceiptView;
 import com.duanjiajun.bizmsg.message.dto.UploadReceiptRequest;
+import com.duanjiajun.bizmsg.message.exception.ReceiptNotFoundException;
 
 /**
  * 报文落盘与回执：先校验 XML 格式良好，再写入本地目录并生成回执编号。
@@ -38,6 +45,12 @@ public class ReceiptStorageService {
     private static final AtomicLong SEQUENCE = new AtomicLong();
 
     private final UploadProperties properties;
+
+    /**
+     * 业务号到回执的内存索引。落盘文件名是回执号，光看目录反查不到业务号，
+     * 前端的「办结后查看报文」和记录列表都靠它。生产环境对应一张 business_id 唯一索引的表。
+     */
+    private final Map<String, ReceiptView> receiptIndex = new ConcurrentHashMap<>();
 
     public ReceiptStorageService(UploadProperties properties) {
 
@@ -60,13 +73,37 @@ public class ReceiptStorageService {
         }
         log.info("报文落盘成功 businessId={} messageType={} receiptNo={} path={}",
                 request.businessId(), request.messageType(), receiptNo, target);
-        return new ReceiptResponse(receiptNo, target.toString(),
+        ReceiptResponse response = new ReceiptResponse(receiptNo, target.toString(),
                 LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")), true, "回执已生成");
+        // 落盘成功后才建索引，保证「索引里有 = 文件一定在」
+        receiptIndex.put(request.businessId(), ReceiptView.of(request.businessId(), request.messageType(), response));
+        return response;
     }
 
-    /**
-     * 校验 XML 格式良好，同时关闭 DTD 与外部实体解析，防止 XXE 与实体膨胀攻击。
-     */
+    /** 按业务号反查回执，供「办结后查看报文」使用。 */
+    public Optional<ReceiptView> findByBusinessId(String businessId) {
+        return Optional.ofNullable(receiptIndex.get(businessId));
+    }
+
+    /** 全部回执，按时间倒序，供「报文记录」页展示。 */
+    public List<ReceiptView> listAll() {
+        return receiptIndex.values().stream()
+                .sorted(Comparator.comparing(ReceiptView::receivedAt).reversed())
+                .toList();
+    }
+
+    /** 读取已落盘报文的原文，供前端回显与人工核对。 */
+    public String readXml(String businessId) {
+        ReceiptView receipt = findByBusinessId(businessId)
+                .orElseThrow(() -> new ReceiptNotFoundException(businessId));
+        try {
+            return Files.readString(Path.of(receipt.storedPath()), StandardCharsets.UTF_8);
+        } catch (IOException ex) {
+            throw new IllegalStateException("读取已落盘报文失败：" + receipt.storedPath(), ex);
+        }
+    }
+
+    /** 校验 XML 格式良好；关掉 DTD 和外部实体，防 XXE 与实体膨胀。 */
     private void requireWellFormedXml(String xml) {
         try {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();

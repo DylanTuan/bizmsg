@@ -5,27 +5,22 @@ import jakarta.xml.bind.annotation.XmlAccessorType;
 import jakarta.xml.bind.annotation.XmlElement;
 import jakarta.xml.bind.annotation.XmlRootElement;
 
-/**
- * 受理报文模型：JAXB 通过字段注解映射为 XML 元素。
- * 用普通类而非 record，是因为 JAXB 对 record 的支持并不完整，字段需要无参构造 + setter。
- */
+/** 受理报文模型。JAXB 对 record 支持不完整，所以用普通类加无参构造和 setter。 */
 @XmlRootElement(name = "report")
 @XmlAccessorType(XmlAccessType.FIELD)
 public class ReportMessage {
 
-    /** 业务流水号，全局唯一，下游据此做幂等。 */
     @XmlElement(name = "businessId", required = true)
     private String businessId;
 
-    /** 报文类型，例如 ACCEPT / RECEIPT。 */
     @XmlElement(name = "messageType", required = true)
     private String messageType;
 
-    /** 报文生成时间，格式 yyyy-MM-dd HH:mm:ss。 */
+    /** yyyy-MM-dd HH:mm:ss */
     @XmlElement(name = "createdAt")
     private String createdAt;
 
-    /** 业务内容，JAXB 会自动做 XML 转义。 */
+    /** 业务内容，JAXB 负责 XML 转义。 */
     @XmlElement(name = "payload")
     private String payload;
 

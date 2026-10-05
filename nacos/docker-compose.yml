@@ -1,5 +1,8 @@
-# 启动 Nacos 2.x（standalone 模式 + 内置 Derby 存储），供 bizmsg 各服务注册与读取配置
-# 用法：cd nacos && docker compose up -d
+# bizmsg 本地基础设施栈：Nacos 2.x（注册/配置中心）+ RabbitMQ 3.13（业务办结事件总线）
+# 用法：
+#   cd nacos && docker compose up -d              # 全部拉起
+#   docker compose up -d rabbitmq                 # 只拉 RabbitMQ
+#   或直接用根目录的 ./run.sh start mq            # run.sh 会把两个服务分开管理
 services:
   nacos:
     image: nacos/nacos-server:v2.2.3
@@ -8,7 +11,7 @@ services:
     environment:
       MODE: standalone
       PREFER_HOST_MODE: hostname
-      # 练习项目关闭鉴权，方便脚本直接调用 OpenAPI；生产环境务必开q启
+      # 练习项目关闭鉴权，方便脚本直接调用 OpenAPI；生产环境务必开启
       NACOS_AUTH_ENABLE: "false"
       JVM_XMS: 256m
       JVM_XMX: 512m
@@ -21,7 +24,29 @@ services:
       timeout: 5s
       retries: 12
     volumes:
+      # 注意：内置 Derby 在容器可写层，没有挂 data 卷——`docker compose down` 会丢配置
       - nacos-logs:/home/nacos/logs
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: bizmsg-rabbitmq
+    environment:
+      # 练习项目用固定弱口令；生产环境必须换成密钥管理
+      RABBITMQ_DEFAULT_USER: bizmsg
+      RABBITMQ_DEFAULT_PASS: bizmsg
+      RABBITMQ_DEFAULT_VHOST: /
+    ports:
+      - "5672:5672"   # AMQP 协议端口，服务端连接用
+      - "15672:15672" # 管理控制台（bizmsg/bizmsg），可直接看队列/死信/投递速率
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    volumes:
+      # 队列、交换机、绑定都持久化，重启不丢拓扑
+      - rabbitmq-data:/var/lib/rabbitmq
 
 volumes:
   nacos-logs:
+  rabbitmq-data:

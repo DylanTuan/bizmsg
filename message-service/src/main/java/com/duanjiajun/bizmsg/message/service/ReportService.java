@@ -15,11 +15,7 @@ import com.duanjiajun.bizmsg.message.dto.UploadReceiptRequest;
 import com.duanjiajun.bizmsg.message.xml.ReportXmlBuilder;
 import com.duanjiajun.bizmsg.message.xml.model.ReportMessage;
 
-/**
- * 报文业务：本地生成 XML 后交给落盘服务，落盘失败走降级而不是直接抛错。
- * 合并前这里是通过 Feign 远程调用 upload-service，现在退化成一次本地方法调用：
- * 少一跳 HTTP，也就没有了网络超时、JSON 序列化与「目标服务没注册」这一类故障面。
- */
+/** 本地生成 XML 后交给落盘服务；落盘失败只降级不抛错，避免 IO 故障把已生成的报文吞掉。 */
 @Service
 public class ReportService {
 

@@ -17,6 +17,15 @@ spring:
     date-format: yyyy-MM-dd HH:mm:ss
     time-zone: GMT+8
     default-property-inclusion: non_null
+  rabbitmq:
+    # business-service（生产者）与 message-service（消费者）共用的 MQ 连接信息。
+    # 未引入 spring-boot-starter-amqp 的服务（gateway）会直接忽略这段配置。
+    host: 127.0.0.1
+    port: 5672
+    username: bizmsg
+    password: bizmsg
+    virtual-host: /
+    connection-timeout: 5s
   cloud:
     openfeign:
       # 注意：report/upload 合并为 message-service 后，本工程暂无服务间调用，

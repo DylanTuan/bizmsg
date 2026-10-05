@@ -1,19 +1,25 @@
 <script setup lang="ts">
 import { CircleCheck, Clock, Connection, MagicStick, Tickets, Warning } from '@element-plus/icons-vue'
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { useReportRecords } from '@/composables/useReportRecords'
 import { useServiceHealth } from '@/composables/useServiceHealth'
-import { useReportStore } from '@/stores/report'
 import { healthTagType } from '@/utils/format'
 
 const router = useRouter()
-const reportStore = useReportStore()
-const { loading, services, onlineCount, refresh } = useServiceHealth()
+const { loading: healthLoading, services, onlineCount, refresh } = useServiceHealth()
 
-/** 最近 5 条本地记录，完整列表在「报文中心 - 生成记录」。 */
-const recentRecords = () => reportStore.history.slice(0, 5)
+/**
+ * 与「报文记录」页共用同一份数据：服务端回执（含业务模块经 MQ 异步生成的报文）+ 浏览器本地留存，
+ * 已按生成时间倒序。之前这里只读本地 store，导致 MQ 异步生成的报文不出现、显示的反而是更早的记录。
+ */
+const { records, loading: recordsLoading, uploadedCount, degradedCount } = useReportRecords()
 
+/** 最近 5 条，完整列表在「报文中心 - 报文记录」。 */
+const recentRecords = computed(() => records.value.slice(0, 5))
+
+// useReportRecords 内部已自动加载；服务健康需要显式触发一次
 onMounted(() => {
   void refresh()
 })
@@ -38,8 +44,8 @@ onMounted(() => {
           <div class="stat">
             <el-icon class="stat__icon stat__icon--purple"><Tickets /></el-icon>
             <div>
-              <div class="stat__value">{{ reportStore.total }}</div>
-              <div class="stat__label">本地记录（最多 50 条）</div>
+              <div class="stat__value">{{ records.length }}</div>
+              <div class="stat__label">报文记录</div>
             </div>
           </div>
         </el-card>
@@ -49,7 +55,7 @@ onMounted(() => {
           <div class="stat">
             <el-icon class="stat__icon stat__icon--green"><CircleCheck /></el-icon>
             <div>
-              <div class="stat__value">{{ reportStore.uploadedCount }}</div>
+              <div class="stat__value">{{ uploadedCount }}</div>
               <div class="stat__label">上传成功</div>
             </div>
           </div>
@@ -60,7 +66,7 @@ onMounted(() => {
           <div class="stat">
             <el-icon class="stat__icon stat__icon--orange"><Warning /></el-icon>
             <div>
-              <div class="stat__value">{{ reportStore.degradedCount }}</div>
+              <div class="stat__value">{{ degradedCount }}</div>
               <div class="stat__label">降级未上传</div>
             </div>
           </div>
@@ -78,7 +84,7 @@ onMounted(() => {
           </div>
         </div>
       </template>
-      <el-row v-loading="loading" :gutter="16">
+      <el-row v-loading="healthLoading" :gutter="16">
         <el-col v-for="service in services" :key="service.key" :xs="24" :md="8">
           <div class="service">
             <div class="service__head">
@@ -105,7 +111,7 @@ onMounted(() => {
           <el-icon><MagicStick /></el-icon>生成并上传报文
         </el-button>
         <el-button @click="router.push('/report/history')">
-          <el-icon><Clock /></el-icon>查看生成记录
+          <el-icon><Clock /></el-icon>查看报文记录
         </el-button>
       </el-space>
     </el-card>
@@ -117,11 +123,18 @@ onMounted(() => {
           <el-button type="primary" link @click="router.push('/report/history')">全部记录</el-button>
         </div>
       </template>
-      <el-table :data="recentRecords()" empty-text="暂无记录，去「报文生成」试试">
+      <el-table v-loading="recordsLoading" :data="recentRecords" empty-text="暂无记录，去「商品房转移」办一笔业务或「报文生成」试一次">
         <el-table-column prop="businessId" label="业务流水号" min-width="220" show-overflow-tooltip />
-        <el-table-column prop="messageType" label="报文类型" width="120" />
-        <el-table-column prop="createdAt" label="生成时间" width="180" />
-        <el-table-column label="上传状态" width="120">
+        <el-table-column label="来源" width="90">
+          <template #default="{ row }">
+            <el-tag :type="row.source === 'local' ? 'info' : 'success'" size="small" effect="plain">
+              {{ row.source === 'local' ? '本地' : '服务端' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="messageType" label="报文类型" width="130" />
+        <el-table-column prop="createdAt" label="生成时间" width="170" />
+        <el-table-column label="上传状态" width="110">
           <template #default="{ row }">
             <el-tag :type="row.uploaded ? 'success' : 'warning'" size="small">
               {{ row.uploaded ? '已上传' : '已降级' }}

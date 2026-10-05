@@ -26,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -42,8 +43,9 @@ class ReportControllerTest {
 
     @BeforeEach
     void setUp() {
+        ReceiptStorageService storage = successStorage();
         mockMvc = MockMvcBuilders.standaloneSetup(new ReportController(
-                new ReportService(new ReportXmlBuilder(), successStorage()))).build();
+                new ReportService(new ReportXmlBuilder(), storage), storage)).build();
     }
 
     @Test
@@ -84,7 +86,7 @@ class ReportControllerTest {
                 .thenThrow(new IllegalStateException("报文落盘失败：/readonly/data/upload"));
 
         MockMvc failingMvc = MockMvcBuilders.standaloneSetup(new ReportController(
-                new ReportService(new ReportXmlBuilder(), failingStorage))).build();
+                new ReportService(new ReportXmlBuilder(), failingStorage), failingStorage)).build();
 
         MvcResult result = failingMvc.perform(post("/api/report/generate")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -105,8 +107,9 @@ class ReportControllerTest {
         properties.setStorageDir(tempDir.toString());
         properties.setReceiptPrefix("RCPT");
 
-        MockMvc realMvc = MockMvcBuilders.standaloneSetup(new ReportController(
-                new ReportService(new ReportXmlBuilder(), new ReceiptStorageService(properties)))).build();
+        ReceiptStorageService storage = new ReceiptStorageService(properties);
+        MockMvc realMvc = MockMvcBuilders.standaloneSetup(
+                new ReportController(new ReportService(new ReportXmlBuilder(), storage), storage)).build();
 
         MvcResult result = realMvc.perform(post("/api/report/generate")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -123,6 +126,43 @@ class ReportControllerTest {
         assertThat(Files.readString(stored, StandardCharsets.UTF_8))
                 .contains("<businessId>BIZ-MERGE-1</businessId>")
                 .contains("<payload>合并后直调</payload>");
+    }
+
+    @Test
+    @DisplayName("按业务号查回执：已落盘可查到，未落盘 404")
+    void queryReceiptByBusinessId(@TempDir Path tempDir) throws Exception {
+        UploadProperties properties = new UploadProperties();
+        properties.setStorageDir(tempDir.toString());
+        properties.setReceiptPrefix("RCPT");
+        ReceiptStorageService storage = new ReceiptStorageService(properties);
+        MockMvc mvc = MockMvcBuilders
+                .standaloneSetup(new ReportController(new ReportService(new ReportXmlBuilder(), storage), storage))
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
+
+        // 业务尚未生成报文 → 404，前端据此判断「异步报文还没到」
+        mvc.perform(get("/api/report/receipt/TRF-NOT-EXIST")).andExpect(status().isNotFound());
+
+        mvc.perform(post("/api/report/generate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"businessId\":\"TRF-QUERY-1\",\"messageType\":\"HOUSE-TRANSFER\",\"payload\":\"商品房转移\"}"))
+                .andExpect(status().isOk());
+
+        MvcResult result = mvc.perform(get("/api/report/receipt/TRF-QUERY-1"))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        JsonNode body = readBody(result);
+        assertThat(body.get("receiptNo").asText()).startsWith("RCPT-");
+        assertThat(body.get("success").asBoolean()).isTrue();
+
+        // 报文原文回显：前端「商品房转移」页用它展示与下载 XML
+        MvcResult xmlResult = mvc.perform(get("/api/report/receipt/TRF-QUERY-1/xml"))
+                .andExpect(status().isOk())
+                .andReturn();
+        assertThat(readBody(xmlResult).get("xml").asText())
+                .contains("<report>")
+                .contains("<businessId>TRF-QUERY-1</businessId>");
     }
 
     private JsonNode readBody(MvcResult result) throws Exception {

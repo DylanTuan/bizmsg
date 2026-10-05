@@ -9,13 +9,22 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.duanjiajun.bizmsg.message.exception.ReceiptNotFoundException;
+
 /**
- * 统一异常出口：参数/报文问题返回 400，服务端内部错误返回 500，避免把堆栈直接暴露给调用方。
+ * 统一异常出口：参数/报文问题 400、回执不存在 404、服务端内部错误 500，避免把堆栈直接暴露给调用方。
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @ExceptionHandler(ReceiptNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public Map<String, String> handleNotFound(ReceiptNotFoundException ex) {
+        log.warn("回执查询未命中：{}", ex.getMessage());
+        return Map.of("success", "false", "message", ex.getMessage());
+    }
 
     @ExceptionHandler(IllegalArgumentException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)

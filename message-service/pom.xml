@@ -36,6 +36,11 @@
       <groupId>com.alibaba.cloud</groupId>
       <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
     </dependency>
+    <!-- RabbitMQ：消费 business-service 投递的业务办结事件，手动 ack + 死信 + 重试队列 -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-amqp</artifactId>
+    </dependency>
     <!-- Boot 3 已不带 JAXB：api 编译期用，runtime 提供默认实现（版本均由根 POM 的 BOM 管理） -->
     <dependency>
       <groupId>jakarta.xml.bind</groupId>

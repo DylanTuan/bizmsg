@@ -2,9 +2,39 @@
 server:
   port: 8081
 
+spring:
+  rabbitmq:
+    listener:
+      simple:
+        # 手动 ack：只有报文真正落盘才 basicAck，避免「先确认后失败」丢消息。
+        # 改成 auto 会让 TransferReportConsumer 里的手动 ack 变成重复确认并打断 channel，务必保持 manual。
+        acknowledge-mode: manual
+        # 一次只预取一条：失败重试的顺序更可控，也避免大量消息堆在客户端内存里
+        prefetch: 1
+        retry:
+          # 关闭 Spring 自带重试——重试改由「TTL 延迟队列 + 死信回投」在消费端实现（见 RabbitMqConfig）
+          enabled: false
+
 bizmsg:
   upload:
     # 模拟第三方上传：报文落盘目录与回执编号前缀
     # 合并前这两项在 upload-service.yml；bizmsg.upload.service-name / path 已随 OpenFeign 一起移除
     storage-dir: ./data/upload
     receipt-prefix: RCPT
+  mq:
+    # 与 business-service 一致的业务事件交换机与 routing key
+    exchange: bizmsg.business
+    routing-key: business.transfer.completed
+    # 报文生成主队列
+    transfer-queue: bizmsg.message.transfer
+    # 延迟重试：消息在重试队列停留 retry-delay-millis 后死信回主队列
+    retry-exchange: bizmsg.retry
+    retry-queue: bizmsg.message.transfer.retry
+    retry-routing-key: business.transfer.retry
+    retry-delay-millis: 5000
+    # 含首次在内最多尝试 3 次，超出转死信队列
+    max-attempts: 3
+    # 死信：人工排查与补偿的入口，不自动重投
+    dead-letter-exchange: bizmsg.dlx
+    dead-letter-queue: bizmsg.message.transfer.dlq
+    dead-letter-routing-key: bizmsg.message.transfer.dlq

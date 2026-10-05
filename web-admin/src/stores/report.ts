@@ -18,13 +18,15 @@ function toHistoryItem(result: ReportUploadResult): ReportHistoryItem {
     uploaded: result.uploaded,
     receiptNo: result.receiptNo,
     storedPath: result.storedPath,
-    degradeReason: result.degradeReason
+    degradeReason: result.degradeReason,
+    source: 'local'
   }
 }
 
 /**
- * 报文生成记录：后端暂未提供历史查询接口，先在前端本地留存，便于演示与自查。
- * 接入真实列表接口后，把 history 换成服务端分页数据即可，页面无需大改。
+ * 报文生成记录：本地留存「重新上传」所需的 XML 与降级原因。
+ * 列表页会把它与 message-service 的服务端回执合并展示——业务模块经 MQ 异步生成的报文
+ * 不会写进这里，只能从服务端列表拿到（见 views/report/history.vue）。
  */
 export const useReportStore = defineStore('report', () => {
   const history = ref<ReportHistoryItem[]>(getStorage<ReportHistoryItem[]>(STORAGE_KEYS.reportHistory, []))

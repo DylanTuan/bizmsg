@@ -30,3 +30,8 @@ spring:
           uri: lb://message-service
           predicates:
             - Path=/api/upload/**
+        # 商品房转移业务：受理 → 办结，办结后经 RabbitMQ 异步通知 message-service 生成报文
+        - id: business-service
+          uri: lb://business-service
+          predicates:
+            - Path=/api/business/**

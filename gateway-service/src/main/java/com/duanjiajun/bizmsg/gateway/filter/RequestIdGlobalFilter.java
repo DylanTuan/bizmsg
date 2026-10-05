@@ -13,21 +13,17 @@ import org.springframework.web.server.ServerWebExchange;
 
 import reactor.core.publisher.Mono;
 
-/**
- * 全局请求 ID 过滤器：为每个入口请求生成或透传 X-Request-Id，并记录一条访问日志。
- * 作用：跨服务串联日志、快速定位问题；下游服务也可把它当作幂等键的种子。
- */
+/** 给每个入口请求生成或透传 X-Request-Id，并打一条访问日志，用于跨服务串联日志。 */
 @Component
 public class RequestIdGlobalFilter implements GlobalFilter, Ordered {
 
-    /** 请求 ID 的 Header 名称，网关与下游服务统一使用该常量。 */
     public static final String REQUEST_ID_HEADER = "X-Request-Id";
 
     private static final Logger log = LoggerFactory.getLogger(RequestIdGlobalFilter.class);
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-        // 上游已带请求 ID 则透传（便于链路重试复用），否则生成 32 位无连字符 UUID
+        // 上游带了就透传，否则生成 32 位无连字符 UUID
         String requestId = exchange.getRequest().getHeaders().getFirst(REQUEST_ID_HEADER);
         if (!StringUtils.hasText(requestId)) {
             requestId = UUID.randomUUID().toString().replace("-", "");
@@ -38,7 +34,7 @@ public class RequestIdGlobalFilter implements GlobalFilter, Ordered {
         ServerWebExchange mutatedExchange = exchange.mutate()
                 .request(builder -> builder.header(REQUEST_ID_HEADER, traceId))
                 .build();
-        // 回写响应头，调用方可凭该 ID 反查全链路日志
+        // 回写响应头，方便调用方按 ID 反查日志
         mutatedExchange.getResponse().getHeaders().set(REQUEST_ID_HEADER, traceId);
 
         return chain.filter(mutatedExchange)
@@ -52,7 +48,7 @@ public class RequestIdGlobalFilter implements GlobalFilter, Ordered {
 
     @Override
     public int getOrder() {
-        // 最高优先级：确保 Header 在路由转发前写入
+        // 最高优先级，确保转发的请求上已经带上 Header
         return Ordered.HIGHEST_PRECEDENCE;
     }
 }

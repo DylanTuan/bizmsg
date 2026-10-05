@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
 # bizmsg 统一运行脚本
-#   一条命令管理 Nacos、后端微服务（gateway / message）与前端管理系统（web-admin）
+#   一条命令管理 Nacos、RabbitMQ、后端微服务（gateway / business / message）与前端管理系统（web-admin）
 #
 # 用法：./run.sh <命令> [服务...]
-#   start [服务...]     启动服务（默认 all；all 顺序：nacos -> gateway -> message -> web）
+#   start [服务...]     启动服务（默认 all；all 顺序：nacos -> mq -> gateway -> business -> message -> web）
 #   stop  [服务...]     停止服务（默认 all，按启动的逆序停止）
 #   restart [服务...]   重启服务
 #   status              查看所有服务的运行状态与访问地址
@@ -13,13 +13,14 @@
 #   import-config       把 nacos/config/*.yml 发布到 Nacos 配置中心
 #   help                查看帮助
 #
-# 服务名：nacos | gateway | message | web | all
-#   gateway = gateway-service（8080）、message = message-service（8081，报文生成 + 落盘回执）
+# 服务名：nacos | mq | gateway | business | message | web | all
+#   mq = RabbitMQ（5672/15672）、gateway = gateway-service（8080）
+#   business = business-service（8082，商品房转移业务）、message = message-service（8081，报文生成 + 落盘回执）
 #   web = web-admin 前端（5173）
 #
 set -euo pipefail
 
-## ------------------------------ 基础变量 ------------------------------
+# 基础变量
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUN_DIR="${ROOT_DIR}/.run"
 LOG_DIR="${RUN_DIR}/logs"
@@ -51,7 +52,7 @@ else
   C_END=''
 fi
 
-## ------------------------------ 输出工具 ------------------------------
+# 输出工具
 info() { printf '%s[INFO]%s %s\n' "${C_CYAN}" "${C_END}" "$*"; }
 ok() { printf '%s[ OK ]%s %s\n' "${C_GREEN}" "${C_END}" "$*"; }
 warn() { printf '%s[WARN]%s %s\n' "${C_YELLOW}" "${C_END}" "$*"; }
@@ -69,12 +70,14 @@ ensure_dirs() {
   mkdir -p "${LOG_DIR}" "${PID_DIR}"
 }
 
-## ------------------------------ 服务元数据 ------------------------------
+# 服务元数据
 # 输出服务的中文描述，用于日志与控制台提示
 service_desc() {
   case "$1" in
     nacos) echo 'Nacos 注册/配置中心' ;;
+    mq) echo 'RabbitMQ 消息队列' ;;
     gateway) echo 'gateway-service 网关' ;;
+    business) echo 'business-service 业务服务' ;;
     message) echo 'message-service 报文服务' ;;
     web) echo 'web-admin 前端管理系统' ;;
     *) echo "$1" ;;
@@ -84,7 +87,9 @@ service_desc() {
 service_port() {
   case "$1" in
     nacos) echo 8848 ;;
+    mq) echo 5672 ;;
     gateway) echo 8080 ;;
+    business) echo 8082 ;;
     message) echo 8081 ;;
     web) echo 5173 ;;
     *) return 1 ;;
@@ -94,6 +99,7 @@ service_port() {
 service_module() {
   case "$1" in
     gateway) echo gateway-service ;;
+    business) echo business-service ;;
     message) echo message-service ;;
     *) echo '' ;;
   esac
@@ -107,13 +113,16 @@ resolve_targets() {
   fi
   for item in ${raw}; do
     case "${item}" in
-      all) out="${out} nacos gateway message web" ;;
+      # 依赖顺序：先基础设施（nacos、mq），再网关，最后业务与报文
+      all) out="${out} nacos mq gateway business message web" ;;
       nacos) out="${out} nacos" ;;
+      mq | rabbitmq | rabbit) out="${out} mq" ;;
       gateway | gateway-service) out="${out} gateway" ;;
+      business | business-service) out="${out} business" ;;
       message | message-service) out="${out} message" ;;
       web | web-admin | admin) out="${out} web" ;;
       *)
-        err "未知服务：${item}（可选：nacos gateway message web all）"
+        err "未知服务：${item}（可选：nacos mq gateway business message web all）"
         return 1
         ;;
     esac
@@ -129,7 +138,7 @@ reverse_words() {
   echo "${out}"
 }
 
-## ------------------------------ 进程 / 端口 ------------------------------
+# 进程 / 端口
 # 列出监听指定端口的进程号；lsof 无结果时返回码非 0，这里统一吞掉
 port_pids() {
   lsof -nP -iTCP:"$1" -sTCP:LISTEN -t 2>/dev/null || true
@@ -216,7 +225,7 @@ stop_by_port() {
   return "${found}"
 }
 
-## ------------------------------ Nacos ------------------------------
+# Nacos
 # 兼容 docker compose（v2 插件）与独立的 docker-compose 命令
 compose() {
   if "${DOCKER_BIN}" compose version >/dev/null 2>&1; then
@@ -251,7 +260,8 @@ start_nacos() {
     return 1
   fi
   info '启动 Nacos 容器（nacos/nacos-server:v2.2.3，standalone）'
-  if ! compose up -d; then
+  # 只起 nacos 这一个服务：compose 文件里还有 rabbitmq，由 ./run.sh start mq 单独管理
+  if ! compose up -d nacos; then
     err 'Nacos 容器启动失败，请检查 Docker 与 nacos/docker-compose.yml'
     return 1
   fi
@@ -264,7 +274,39 @@ start_nacos() {
   import_configs || return 1
 }
 
-## ------------------------------ 后端服务 ------------------------------
+# RabbitMQ
+# 与 Nacos 同处 nacos/docker-compose.yml，但作为独立服务管理，启停互不影响
+start_mq() {
+  if is_listening 5672; then
+    ok 'RabbitMQ 已在运行'
+    return 0
+  fi
+  require_cmd "${DOCKER_BIN}" 'Docker' || return 1
+  if ! "${DOCKER_BIN}" info >/dev/null 2>&1; then
+    err 'Docker 守护进程未运行，请先启动 Docker Desktop'
+    return 1
+  fi
+  info '启动 RabbitMQ 容器（rabbitmq:3.13-management）'
+  if ! compose up -d rabbitmq; then
+    err 'RabbitMQ 容器启动失败，请检查 Docker 与 nacos/docker-compose.yml'
+    return 1
+  fi
+  info '等待 RabbitMQ 就绪（最长 180s）...'
+  # 用 compose 里定义的 healthcheck 结果判定，比等端口更准：5672 通了不代表 broker 已能正常收发
+  local waited=0
+  while [ "${waited}" -lt 180 ]; do
+    if [ "$("${DOCKER_BIN}" inspect -f '{{.State.Health.Status}}' bizmsg-rabbitmq 2>/dev/null)" = 'healthy' ]; then
+      ok 'RabbitMQ 就绪 → 管理台 http://127.0.0.1:15672 （bizmsg/bizmsg）'
+      return 0
+    fi
+    sleep 2
+    waited=$((waited + 2))
+  done
+  err "RabbitMQ 未在预期时间内就绪，请查看容器日志：${DOCKER_BIN} logs bizmsg-rabbitmq"
+  return 1
+}
+
+# 后端服务
 start_backend() {
   local name="$1" module port log_file pid_file
   module="$(service_module "${name}")"
@@ -295,7 +337,7 @@ start_backend() {
   fi
 }
 
-## ------------------------------ 前端 ------------------------------
+# 前端
 start_web() {
   local dir="${ROOT_DIR}/web-admin" port=5173 log_file pid_file
   log_file="${LOG_DIR}/web.log"
@@ -328,11 +370,12 @@ start_web() {
   fi
 }
 
-## ------------------------------ 启停命令 ------------------------------
+# 启停命令
 start_one() {
   case "$1" in
     nacos) start_nacos ;;
-    gateway | message) start_backend "$1" ;;
+    mq) start_mq ;;
+    gateway | business | message) start_backend "$1" ;;
     web) start_web ;;
     *) err "未知服务：$1"; return 1 ;;
   esac
@@ -342,16 +385,21 @@ stop_one() {
   local name="$1" port pid pid_file stopped=1
   port="$(service_port "${name}")"
 
-  if [ "${name}" = 'nacos' ]; then
-    if is_listening "${port}"; then
-      info '停止 Nacos 容器'
-      compose stop
-      ok 'Nacos 已停止（容器保留，可用 ./run.sh start nacos 快速拉起）'
-    else
-      warn 'Nacos 未在运行'
-    fi
-    return 0
-  fi
+  # 容器类服务（Nacos / RabbitMQ）：交给 docker compose 停，容器与数据都保留
+  case "${name}" in
+    nacos | mq)
+      local compose_service
+      if [ "${name}" = 'nacos' ]; then compose_service='nacos'; else compose_service='rabbitmq'; fi
+      if is_listening "${port}"; then
+        info "停止 $(service_desc "${name}") 容器"
+        compose stop "${compose_service}"
+        ok "$(service_desc "${name}") 已停止（容器保留，可用 ./run.sh start ${name} 快速拉起）"
+      else
+        warn "$(service_desc "${name}") 未在运行"
+      fi
+      return 0
+      ;;
+  esac
 
   pid_file="$(pid_file_of "${name}")"
   pid="$(read_pid "${name}")"
@@ -378,10 +426,11 @@ print_summary() {
   printf '  %s前端管理系统%s  http://localhost:5173  （演示账号 admin/123456）\n' "${C_CYAN}" "${C_END}"
   printf '  %s网关入口%s      http://127.0.0.1:8080\n' "${C_CYAN}" "${C_END}"
   printf '  %sNacos 控制台%s  http://%s/nacos  （nacos/nacos）\n' "${C_CYAN}" "${C_END}" "${NACOS_ADDR}"
-  printf '  %s查看日志%s      ./run.sh logs <nacos|gateway|message|web>\n' "${C_CYAN}" "${C_END}"
+  printf '  %sRabbitMQ 管理台%s http://127.0.0.1:15672  （bizmsg/bizmsg）\n' "${C_CYAN}" "${C_END}"
+  printf '  %s查看日志%s      ./run.sh logs <nacos|mq|gateway|business|message|web>\n' "${C_CYAN}" "${C_END}"
 }
 
-## ------------------------------ 子命令 ------------------------------
+# 子命令
 cmd_start() {
   local targets failed=0
   targets="$(resolve_targets "$@")" || exit 2
@@ -399,7 +448,7 @@ cmd_start() {
 cmd_stop() {
   local targets
   targets="$(resolve_targets "$@")" || exit 2
-  # 按启动的逆序停止：web -> message -> gateway -> nacos
+  # 按启动的逆序停止：web -> message -> business -> gateway -> mq -> nacos
   targets="$(reverse_words "${targets}")"
   local failed=0 item
   for item in ${targets}; do
@@ -420,7 +469,7 @@ cmd_status() {
   echo ''
   echo 'bizmsg 服务状态'
   echo '----------------------------------------------------------------'
-  for name in nacos gateway message web; do
+  for name in nacos mq gateway business message web; do
     port="$(service_port "${name}")"
     pid="$(port_pid "${port}")"
     if [ -n "${pid}" ]; then
@@ -438,13 +487,15 @@ cmd_status() {
 cmd_logs() {
   local name="${1:-}"
   if [ -z "${name}" ]; then
-    err '用法：./run.sh logs <nacos|gateway|message|web>'
+    err '用法：./run.sh logs <nacos|mq|gateway|business|message|web>'
     return 2
   fi
   case "${name}" in
     gateway | gateway-service) name=gateway ;;
+    business | business-service) name=business ;;
     message | message-service) name=message ;;
     web | web-admin | admin) name=web ;;
+    mq | rabbitmq | rabbit) name=mq ;;
     nacos) ;;
     *)
       err "未知服务：${name}"
@@ -452,8 +503,13 @@ cmd_logs() {
       ;;
   esac
 
+  # 容器类服务的日志直接从 docker 取
   if [ "${name}" = 'nacos' ]; then
-    compose logs -f --tail=100
+    compose logs -f --tail=100 nacos
+    return 0
+  fi
+  if [ "${name}" = 'mq' ]; then
+    compose logs -f --tail=100 rabbitmq
     return 0
   fi
 
@@ -491,7 +547,7 @@ bizmsg 统一运行脚本
 
 命令：
   start [服务...]     启动服务，默认 all
-                      all 顺序：nacos -> gateway -> message -> web
+                      all 顺序：nacos -> mq -> gateway -> business -> message -> web
   stop  [服务...]     停止服务，默认 all（按启动逆序停止）
   restart [服务...]   重启服务
   status              查看所有服务的运行状态与访问地址
@@ -502,23 +558,27 @@ bizmsg 统一运行脚本
 
 服务名与端口：
   nacos    8848   Nacos 注册/配置中心（Docker 容器 bizmsg-nacos）
+  mq       5672   RabbitMQ 消息队列（容器 bizmsg-rabbitmq，管理台 15672）
   gateway  8080   gateway-service 网关，前端 /api 统一入口
-  message  8081   message-service 报文服务（生成 XML + 落盘回执）
+  business 8082   business-service 业务服务（商品房转移：受理 → 办结 → 发 MQ）
+  message  8081   message-service 报文服务（消费办结事件，生成 XML + 落盘回执）
   web      5173   web-admin 前端管理系统（Vite dev server）
-  all             nacos + gateway + message + web
+  all             nacos + mq + gateway + business + message + web
 
 常用示例：
   ./run.sh start                  一键启动全部服务
-  ./run.sh start nacos web        只启动 Nacos 与前端
+  ./run.sh start nacos mq         只启动 Nacos 与 RabbitMQ
   ./run.sh restart gateway        重启网关
   ./run.sh status                 查看状态
   ./run.sh logs message           查看报文服务日志
+  ./run.sh logs mq                跟踪 RabbitMQ 容器日志
   ./run.sh stop                   停止全部服务
 
 说明：
   - 运行期日志与 PID 统一放在 .run/ 下，已加入 .gitignore，可随时删除。
   - 后端通过 mvn -pl <module> spring-boot:run 启动，首次运行需联网下载依赖，耗时会明显变长。
   - 端口/路由等共享配置来自 Nacos，start nacos 会自动执行 nacos/scripts/import-config.sh 发布配置。
+  - Nacos 与 RabbitMQ 共用 nacos/docker-compose.yml，但作为两个独立服务启停，互不影响。
   - 可用环境变量覆盖：NACOS_ADDR、NACOS_NAMESPACE、START_TIMEOUT、MVN_BIN、NPM_BIN、DOCKER_BIN。
 USAGE
 }

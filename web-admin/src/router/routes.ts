@@ -71,6 +71,20 @@ export const constantRoutes: RouteRecordRaw[] = [
     ]
   },
   {
+    path: '/business',
+    component: Layout,
+    redirect: '/business/transfer',
+    meta: { title: '业务办理', icon: 'OfficeBuilding' },
+    children: [
+      {
+        path: 'transfer',
+        name: 'HouseTransfer',
+        component: () => import('@/views/business/transfer.vue'),
+        meta: { title: '商品房转移', icon: 'House' }
+      }
+    ]
+  },
+  {
     path: '/monitor',
     component: Layout,
     redirect: '/monitor/services',
